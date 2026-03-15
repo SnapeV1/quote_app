@@ -1,0 +1,39 @@
+workflows:
+  ios-workflow:
+    name: DailyLine iOS
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+
+      - name: Build Flutter app
+        script: flutter build ios --release --no-codesign
+
+      - name: Build QuoteWidget extension
+        script: |
+          xcodebuild \
+            -workspace ios/Runner.xcworkspace \
+            -scheme QuoteWidget \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            -derivedDataPath /tmp/widget_build \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Embed widget into app bundle
+        script: |
+          mkdir -p build/ios/iphoneos/Runner.app/PlugIns
+          cp -r /tmp/widget_build/Build/Products/Release-iphoneos/QuoteWidget.appex \
+            build/ios/iphoneos/Runner.app/PlugIns/
+
+      - name: Package IPA
+        script: |
+          mkdir -p /tmp/ipa_stage/Payload
+          cp -r build/ios/iphoneos/Runner.app /tmp/ipa_stage/Payload/
+          cd /tmp/ipa_stage
+          zip -r $CM_BUILD_DIR/DailyLine.ipa Payload
+
+    artifacts:
+      - DailyLine.ipa
