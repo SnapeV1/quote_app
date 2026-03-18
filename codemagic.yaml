@@ -1,18 +1,28 @@
 workflows:
-  ios-workflow:
-    name: DailyLine iOS
+  release-workflow:
+    name: DailyLine Full Release
+
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
+
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
 
-      - name: Build Flutter app
+      # ANDROID
+      - name: Build APK
+        script: flutter build apk --release
+
+      - name: Build AAB
+        script: flutter build appbundle --release
+
+      # IOS
+      - name: Build Flutter iOS
         script: flutter build ios --release --no-codesign
 
-      - name: Build QuoteWidget extension
+      - name: Build QuoteWidget
         script: |
           xcodebuild \
             -workspace ios/Runner.xcworkspace \
@@ -22,7 +32,7 @@ workflows:
             -derivedDataPath /tmp/widget_build \
             CODE_SIGNING_ALLOWED=NO
 
-      - name: Embed widget into app bundle
+      - name: Embed widget
         script: |
           mkdir -p build/ios/iphoneos/Runner.app/PlugIns
           cp -r /tmp/widget_build/Build/Products/Release-iphoneos/QuoteWidget.appex \
@@ -35,5 +45,22 @@ workflows:
           cd /tmp/ipa_stage
           zip -r $CM_BUILD_DIR/DailyLine.ipa Payload
 
+      # 🔥 CREATE GITHUB RELEASE
+      - name: Publish to GitHub Releases
+        script: |
+          TAG="v1.0.${BUILD_NUMBER}"
+
+          gh auth login --with-token <<< "$GITHUB_TOKEN"
+
+          gh release create $TAG \
+            build/app/outputs/flutter-apk/app-release.apk \
+            build/app/outputs/bundle/release/app-release.aab \
+            DailyLine.ipa \
+            --repo SnapeV1/DailyLine \
+            --title "DailyLine $TAG" \
+            --notes "🚀 Automated release from Codemagic"
+
     artifacts:
+      - build/app/outputs/flutter-apk/app-release.apk
+      - build/app/outputs/bundle/release/app-release.aab
       - DailyLine.ipa

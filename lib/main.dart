@@ -2,10 +2,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Required by home_widget — must match your App Group ID exactly
+  HomeWidget.setAppGroupId('group.com.yourname.dailyline');
   runApp(const DailyLineApp());
 }
 
@@ -168,8 +171,7 @@ class AppStorage {
           _qKey, jsonEncode(qs.map((q) => q.toJson()).toList()));
 
   static Future<int> loadIndex() async => (await _p).getInt(_iKey) ?? 0;
-  static Future<void> saveIndex(int i) async =>
-      (await _p).setInt(_iKey, i);
+  static Future<void> saveIndex(int i) async => (await _p).setInt(_iKey, i);
 
   static Future<String?> loadDate() async => (await _p).getString(_dKey);
   static Future<void> saveDate(String d) async =>
@@ -192,8 +194,7 @@ class AppStorage {
         author: "Marcus Aurelius",
         book: "Meditations"),
     Quote(
-        text:
-            "He who fears death will never do anything worthy of a living man.",
+        text: "He who fears death will never do anything worthy of a living man.",
         author: "Seneca",
         book: "Letters from a Stoic"),
     Quote(
@@ -212,8 +213,7 @@ class AppStorage {
         author: "Seneca",
         book: "Letters from a Stoic"),
     Quote(
-        text:
-            "Waste no more time arguing what a good man should be. Be one.",
+        text: "Waste no more time arguing what a good man should be. Be one.",
         author: "Marcus Aurelius",
         book: "Meditations"),
     Quote(
@@ -222,6 +222,32 @@ class AppStorage {
         author: "Seneca",
         book: "Letters from a Stoic"),
   ];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WIDGET BRIDGE
+// Writes the current quote into shared storage so the native home screen
+// widget (iOS WidgetKit / Android AppWidgetProvider) can read it.
+// Wrapped in try/catch so the app works fine before the native side is set up.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class WidgetBridge {
+  static const _iOSName     = 'DailyLineWidget';
+  static const _androidName = 'DailyLineWidget';
+
+  static Future<void> push(Quote quote) async {
+    try {
+      await HomeWidget.saveWidgetData<String>('widget_quote',  quote.text);
+      await HomeWidget.saveWidgetData<String>('widget_author', quote.author);
+      await HomeWidget.saveWidgetData<String>('widget_book',   quote.book);
+      await HomeWidget.updateWidget(
+        iOSName:     _iOSName,
+        androidName: _androidName,
+      );
+    } catch (_) {
+      // Native widget extension not yet configured — silently ignore.
+    }
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -306,25 +332,27 @@ class _QuoteScreenState extends State<QuoteScreen>
         CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut);
     _entrySlide =
         Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(
-            CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+            CurvedAnimation(
+                parent: _entryCtrl, curve: Curves.easeOutCubic));
 
     _quoteFade =
         CurvedAnimation(parent: _quoteCtrl, curve: Curves.easeOut);
     _quoteSlide =
         Tween<Offset>(begin: const Offset(0, 0.03), end: Offset.zero).animate(
-            CurvedAnimation(parent: _quoteCtrl, curve: Curves.easeOutCubic));
+            CurvedAnimation(
+                parent: _quoteCtrl, curve: Curves.easeOutCubic));
 
     _init();
   }
 
   Future<void> _init() async {
-    final quotes = await AppStorage.loadQuotes();
-    final saved = await AppStorage.loadIndex();
+    final quotes   = await AppStorage.loadQuotes();
+    final saved    = await AppStorage.loadIndex();
     final lastDate = await AppStorage.loadDate();
-    final today = _today();
+    final today    = _today();
 
-    int index =
-        quotes.isEmpty ? 0 : saved.clamp(0, quotes.length - 1);
+    int index = quotes.isEmpty ? 0 : saved.clamp(0, quotes.length - 1);
+
     if (lastDate != today && quotes.isNotEmpty) {
       index = (index + 1) % quotes.length;
       await AppStorage.saveDate(today);
@@ -338,13 +366,18 @@ class _QuoteScreenState extends State<QuoteScreen>
       _currentIndex = index;
       _loading = false;
     });
+
+    // Push initial quote to home screen widget
+    if (quotes.isNotEmpty) await WidgetBridge.push(quotes[index]);
+
     _entryCtrl.forward();
     _quoteCtrl.forward();
   }
 
   String _today() {
     final n = DateTime.now();
-    return '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+    return '${n.year}-${n.month.toString().padLeft(2, '0')}-'
+        '${n.day.toString().padLeft(2, '0')}';
   }
 
   String _formattedDate() {
@@ -358,7 +391,7 @@ class _QuoteScreenState extends State<QuoteScreen>
 
   Future<void> _persist() => AppStorage.saveQuotes(_quotes);
 
-  // ── Skip: reverse fully → swap state while invisible → forward ──────────
+  // ── Skip: fade out → swap state while invisible → fade in ───────────────
   void _skip() {
     if (_quotes.isEmpty) return;
     _quoteCtrl
@@ -370,7 +403,8 @@ class _QuoteScreenState extends State<QuoteScreen>
       setState(() => _currentIndex = next);
       AppStorage.saveIndex(next);
       AppStorage.saveDate(_today());
-      // Wait one frame so the new widget is built at opacity=0 before fading in
+      WidgetBridge.push(_quotes[next]);
+      // One frame delay so new widget renders at opacity=0 before fading in
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _quoteCtrl.animateTo(1.0,
             duration: const Duration(milliseconds: 320),
@@ -399,6 +433,7 @@ class _QuoteScreenState extends State<QuoteScreen>
           _currentIndex.clamp(0, (_quotes.length - 1).clamp(0, 9999));
     });
     await _persist();
+    if (_quotes.isNotEmpty) await WidgetBridge.push(_quotes[_currentIndex]);
   }
 
   void _delete(String id) async {
@@ -411,6 +446,7 @@ class _QuoteScreenState extends State<QuoteScreen>
       }
     });
     await _persist();
+    if (_quotes.isNotEmpty) await WidgetBridge.push(_quotes[_currentIndex]);
   }
 
   void _toast(String msg, {bool error = false}) {
@@ -442,27 +478,26 @@ class _QuoteScreenState extends State<QuoteScreen>
   }
 
   Future<void> _export() async {
-    await Clipboard.setData(
-        ClipboardData(text: jsonEncode(_quotes.map((q) => q.toJson()).toList())));
+    await Clipboard.setData(ClipboardData(
+        text: jsonEncode(_quotes.map((q) => q.toJson()).toList())));
     if (!mounted) return;
     _toast('${_quotes.length} quotes copied to clipboard');
   }
 
   Future<void> _import() async {
     final raw = await showDialog<String>(
-        context: context,
-        builder: (_) => JsonImportDialog(theme: t));
+        context: context, builder: (_) => JsonImportDialog(theme: t));
     if (raw == null || raw.trim().isEmpty) return;
     try {
       final list = jsonDecode(raw) as List;
-      final imported = list
-          .map((e) => Quote.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final imported =
+          list.map((e) => Quote.fromJson(e as Map<String, dynamic>)).toList();
       setState(() {
         _quotes = imported;
         _currentIndex = 0;
       });
       await _persist();
+      if (imported.isNotEmpty) await WidgetBridge.push(imported[0]);
       if (!mounted) return;
       _toast('Imported ${imported.length} quotes');
     } catch (_) {
@@ -518,8 +553,7 @@ class _QuoteScreenState extends State<QuoteScreen>
                             slideAnim: _quoteSlide,
                             onSkip: _skip,
                             onAdd: () => _openForm(),
-                            onViewAll: () =>
-                                setState(() => _showAll = true),
+                            onViewAll: () => setState(() => _showAll = true),
                             onSettings: () => showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
@@ -529,8 +563,7 @@ class _QuoteScreenState extends State<QuoteScreen>
                                 onThemeChanged: widget.appState.setTheme,
                                 onExport: _export,
                                 onImport: _import,
-                                onProfile: () =>
-                                    _toast('Profile coming soon'),
+                                onProfile: () => _toast('Profile coming soon'),
                               ),
                             ),
                           ),
@@ -574,7 +607,7 @@ class _MainPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = theme;
     return Column(children: [
-      // ── Header ──────────────────────────────────────────────────────────
+      // ── Header ─────────────────────────────────────────────────────────
       Padding(
         padding: const EdgeInsets.fromLTRB(28, 20, 20, 0),
         child: Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
@@ -602,7 +635,7 @@ class _MainPage extends StatelessWidget {
         ]),
       ),
 
-      // ── Quote ─────────────────────────────────────────────────────────
+      // ── Quote ──────────────────────────────────────────────────────────
       Expanded(
         child: quote == null
             ? _EmptyState(theme: t, onAdd: onAdd)
@@ -616,15 +649,13 @@ class _MainPage extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Decorative quote mark
                         Text('\u201C',
                             style: GoogleFonts.cormorantGaramond(
                                 color: t.quoteMark,
                                 fontSize: 120,
                                 height: 0.75)),
                         const SizedBox(height: 8),
-
-                        // Quote body — no AnimatedSwitcher, parent handles transition
+                        // No AnimatedSwitcher — parent FadeTransition owns the transition
                         Text(
                           quote!.text,
                           style: GoogleFonts.cormorantGaramond(
@@ -635,10 +666,7 @@ class _MainPage extends StatelessWidget {
                               height: 1.5,
                               letterSpacing: -0.2),
                         ),
-
                         const SizedBox(height: 32),
-
-                        // Attribution
                         Row(children: [
                           Container(
                               width: 24,
@@ -649,20 +677,16 @@ class _MainPage extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  quote!.author,
-                                  style: GoogleFonts.dmSans(
-                                      color: t.accent,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.3),
-                                ),
-                                if (quote!.book.isNotEmpty)
-                                  Text(
-                                    quote!.book,
+                                Text(quote!.author,
                                     style: GoogleFonts.dmSans(
-                                        color: t.textMuted, fontSize: 11),
-                                  ),
+                                        color: t.accent,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.3)),
+                                if (quote!.book.isNotEmpty)
+                                  Text(quote!.book,
+                                      style: GoogleFonts.dmSans(
+                                          color: t.textMuted, fontSize: 11)),
                               ],
                             ),
                           ),
@@ -674,7 +698,7 @@ class _MainPage extends StatelessWidget {
               ),
       ),
 
-      // ── Footer ──────────────────────────────────────────────────────────
+      // ── Footer ─────────────────────────────────────────────────────────
       if (quote != null)
         Padding(
           padding: const EdgeInsets.fromLTRB(28, 0, 28, 32),
@@ -715,17 +739,14 @@ class _HdrBtn extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         height: 40,
-        padding:
-            EdgeInsets.symmetric(horizontal: badge != null ? 12 : 11),
+        padding: EdgeInsets.symmetric(horizontal: badge != null ? 12 : 11),
         decoration: BoxDecoration(
           color: active
               ? t.accent.withOpacity(0.15)
               : t.text.withOpacity(0.06),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-              color: active
-                  ? t.accent.withOpacity(0.4)
-                  : t.border,
+              color: active ? t.accent.withOpacity(0.4) : t.border,
               width: 0.5),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -783,8 +804,8 @@ class _SettingsMenuBtn extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<String> _menuItem(String val, IconData ic, String lbl,
-      String? sub, AppTheme t) =>
+  PopupMenuItem<String> _menuItem(
+          String val, IconData ic, String lbl, String? sub, AppTheme t) =>
       PopupMenuItem(
         value: val,
         height: sub != null ? 52 : 44,
@@ -887,8 +908,7 @@ class _SkipBtnState extends State<_SkipBtn>
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
             color: t.accent,
             borderRadius: BorderRadius.circular(14),
@@ -943,11 +963,10 @@ class _EmptyState extends StatelessWidget {
           GestureDetector(
             onTap: onAdd,
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 22, vertical: 13),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 22, vertical: 13),
               decoration: BoxDecoration(
-                  color: t.accent,
-                  borderRadius: BorderRadius.circular(14)),
+                  color: t.accent, borderRadius: BorderRadius.circular(14)),
               child: Text('Add first quote',
                   style: GoogleFonts.dmSans(
                       color: t.onAccent,
@@ -986,7 +1005,6 @@ class _AllQuotesPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = theme;
     return Column(children: [
-      // Header
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
         child: Row(children: [
@@ -1008,13 +1026,9 @@ class _AllQuotesPage extends StatelessWidget {
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('All Quotes',
                 style: GoogleFonts.cormorantGaramond(
-                    color: t.text,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600)),
-            Text(
-                '${quotes.length} quote${quotes.length == 1 ? '' : 's'}',
-                style:
-                    GoogleFonts.dmSans(color: t.textMuted, fontSize: 11)),
+                    color: t.text, fontSize: 22, fontWeight: FontWeight.w600)),
+            Text('${quotes.length} quote${quotes.length == 1 ? '' : 's'}',
+                style: GoogleFonts.dmSans(color: t.textMuted, fontSize: 11)),
           ]),
           const Spacer(),
           GestureDetector(
@@ -1023,9 +1037,7 @@ class _AllQuotesPage extends StatelessWidget {
               height: 40,
               padding: const EdgeInsets.symmetric(horizontal: 14),
               decoration: BoxDecoration(
-                color: t.accent,
-                borderRadius: BorderRadius.circular(12),
-              ),
+                  color: t.accent, borderRadius: BorderRadius.circular(12)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
                 Icon(Icons.add_rounded, size: 16, color: t.onAccent),
                 const SizedBox(width: 5),
@@ -1039,8 +1051,6 @@ class _AllQuotesPage extends StatelessWidget {
           ),
         ]),
       ),
-
-      // List
       Expanded(
         child: quotes.isEmpty
             ? Center(
@@ -1104,21 +1114,20 @@ class _QuoteCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  Text(quote.author,
-                      style: GoogleFonts.dmSans(
-                          color: t.accent,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.2)),
-                  if (quote.book.isNotEmpty)
-                    Text(quote.book,
-                        style: GoogleFonts.dmSans(
-                            color: t.textMuted,
-                            fontSize: 11,
-                            letterSpacing: 0.1)),
-                ])),
-            _CardAction(
-                icon: Icons.edit_outlined, theme: t, onTap: onEdit),
+              Text(quote.author,
+                  style: GoogleFonts.dmSans(
+                      color: t.accent,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2)),
+              if (quote.book.isNotEmpty)
+                Text(quote.book,
+                    style: GoogleFonts.dmSans(
+                        color: t.textMuted,
+                        fontSize: 11,
+                        letterSpacing: 0.1)),
+            ])),
+            _CardAction(icon: Icons.edit_outlined, theme: t, onTap: onEdit),
             const SizedBox(width: 6),
             _CardAction(
                 icon: Icons.delete_outline_rounded,
@@ -1159,9 +1168,7 @@ class _CardAction extends StatelessWidget {
               : t.text.withOpacity(0.05),
           borderRadius: BorderRadius.circular(9),
           border: Border.all(
-              color: danger
-                  ? Colors.red.withOpacity(0.18)
-                  : t.border,
+              color: danger ? Colors.red.withOpacity(0.18) : t.border,
               width: 0.5),
         ),
         child: Icon(icon,
@@ -1198,8 +1205,7 @@ class SettingsSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: t.surface,
-        borderRadius:
-            const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(top: BorderSide(color: t.border, width: 0.5)),
       ),
       padding: EdgeInsets.fromLTRB(
@@ -1208,7 +1214,6 @@ class SettingsSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Handle
             Center(
               child: Container(
                 width: 32,
@@ -1219,8 +1224,6 @@ class SettingsSheet extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2)),
               ),
             ),
-
-            // Profile tile
             _ProfileTile(
                 theme: t,
                 onTap: () {
@@ -1228,13 +1231,10 @@ class SettingsSheet extends StatelessWidget {
                   onProfile();
                 }),
             const SizedBox(height: 24),
-
             _Label('Appearance', t),
             const SizedBox(height: 10),
             _ThemeSelector(current: theme, onChanged: onThemeChanged),
-
             const SizedBox(height: 24),
-
             _Label('Data', t),
             const SizedBox(height: 10),
             Row(children: [
@@ -1290,8 +1290,7 @@ class _ProfileTile extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: t.accent.withOpacity(0.15),
-              border:
-                  Border.all(color: t.accent.withOpacity(0.3), width: 0.5),
+              border: Border.all(color: t.accent.withOpacity(0.3), width: 0.5),
             ),
             child: Center(
                 child: Text('D',
@@ -1311,8 +1310,7 @@ class _ProfileTile extends StatelessWidget {
                     fontSize: 15,
                     fontWeight: FontWeight.w600)),
             Text('Personalization coming soon',
-                style:
-                    GoogleFonts.dmSans(color: t.textMuted, fontSize: 11)),
+                style: GoogleFonts.dmSans(color: t.textMuted, fontSize: 11)),
           ])),
           Icon(Icons.chevron_right_rounded, size: 18, color: t.textMuted),
         ]),
@@ -1337,8 +1335,7 @@ class _Label extends StatelessWidget {
 }
 
 class _ThemeSelector extends StatelessWidget {
-  const _ThemeSelector(
-      {required this.current, required this.onChanged});
+  const _ThemeSelector({required this.current, required this.onChanged});
 
   final AppTheme current;
   final void Function(AppTheme) onChanged;
@@ -1363,9 +1360,7 @@ class _ThemeSelector extends StatelessWidget {
                       : t.text.withOpacity(0.04),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: sel
-                        ? th.accent.withOpacity(0.6)
-                        : t.border,
+                    color: sel ? th.accent.withOpacity(0.6) : t.border,
                     width: sel ? 1.5 : 0.5,
                   ),
                 ),
@@ -1385,9 +1380,8 @@ class _ThemeSelector extends StatelessWidget {
                       style: GoogleFonts.dmSans(
                           color: sel ? th.accent : t.textMuted,
                           fontSize: 10,
-                          fontWeight: sel
-                              ? FontWeight.w700
-                              : FontWeight.w400)),
+                          fontWeight:
+                              sel ? FontWeight.w700 : FontWeight.w400)),
                 ]),
               ),
             ),
@@ -1498,16 +1492,13 @@ class _JsonImportDialogState extends State<JsonImportDialog> {
                   contentPadding: const EdgeInsets.all(14),
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: t.border, width: 0.5)),
+                      borderSide: BorderSide(color: t.border, width: 0.5)),
                   enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: t.border, width: 0.5)),
+                      borderSide: BorderSide(color: t.border, width: 0.5)),
                   focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: t.accent, width: 1)),
+                      borderSide: BorderSide(color: t.accent, width: 1)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1563,9 +1554,9 @@ class _QuoteFormSheetState extends State<QuoteFormSheet> {
   @override
   void initState() {
     super.initState();
-    _text = TextEditingController(text: widget.existing?.text ?? '');
+    _text   = TextEditingController(text: widget.existing?.text   ?? '');
     _author = TextEditingController(text: widget.existing?.author ?? '');
-    _book = TextEditingController(text: widget.existing?.book ?? '');
+    _book   = TextEditingController(text: widget.existing?.book   ?? '');
   }
 
   @override
@@ -1721,4 +1712,4 @@ class _Field extends StatelessWidget {
       ),
     ]);
   }
-} 
+}
