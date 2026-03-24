@@ -5,6 +5,8 @@ workflows:
       flutter: stable
       xcode: latest
       cocoapods: default
+      groups:
+        - github
       vars:
         GRADLE_VERSION: 8.2
     scripts:
@@ -49,7 +51,6 @@ workflows:
       - name: Publish to GitHub Releases
         script: |
           TAG="v1.0.${BUILD_NUMBER}"
-          export GH_TOKEN="$GITHUB_TOKEN"
           gh release create "$TAG" \
             build/app/outputs/flutter-apk/app-release.apk \
             build/app/outputs/bundle/release/app-release.aab \
