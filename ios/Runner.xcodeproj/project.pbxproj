@@ -520,7 +520,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.dailyline.QuoteWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.quoteApp.QuoteWidget;
 				PRODUCT_NAME = QuoteWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -666,7 +666,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.dailyline.QuoteWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.quoteApp.QuoteWidget;
 				PRODUCT_NAME = QuoteWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -844,7 +844,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourname.dailyline.QuoteWidget;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.quoteApp.QuoteWidget;
 				PRODUCT_NAME = QuoteWidget;
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
