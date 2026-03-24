@@ -1,14 +1,12 @@
 workflows:
   release-workflow:
     name: DailyLine Full Release
-
     environment:
       flutter: stable
       xcode: latest
       cocoapods: default
       vars:
         GRADLE_VERSION: 8.2
-
     scripts:
       - name: Get Flutter packages
         script: flutter pub get
@@ -45,19 +43,17 @@ workflows:
           mkdir -p /tmp/ipa_stage/Payload
           cp -r build/ios/iphoneos/Runner.app /tmp/ipa_stage/Payload/
           cd /tmp/ipa_stage
-          zip -r $CM_BUILD_DIR/DailyLine.ipa Payload
+          zip -r "$CM_BUILD_DIR/DailyLine.ipa" Payload
 
       # 🔥 CREATE GITHUB RELEASE
       - name: Publish to GitHub Releases
         script: |
           TAG="v1.0.${BUILD_NUMBER}"
-
-          gh auth login --with-token <<< "$GITHUB_TOKEN"
-
-          gh release create $TAG \
+          export GH_TOKEN="$GITHUB_TOKEN"
+          gh release create "$TAG" \
             build/app/outputs/flutter-apk/app-release.apk \
             build/app/outputs/bundle/release/app-release.aab \
-            DailyLine.ipa \
+            "$CM_BUILD_DIR/DailyLine.ipa" \
             --repo SnapeV1/DailyLine \
             --title "DailyLine $TAG" \
             --notes "🚀 Automated release from Codemagic"
