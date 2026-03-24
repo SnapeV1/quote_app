@@ -52,6 +52,7 @@ workflows:
         script: |
           git config user.email "hamada_amine@yahoo.com"
           git config user.name "SnapeV1"
+          git remote set-url origin "https://SnapeV1:${GH_TOKEN}@github.com/SnapeV1/quote_app.git"
           TAG="v1.0.${BUILD_NUMBER}"
           git tag "$TAG"
           git push origin "$TAG"
@@ -59,7 +60,7 @@ workflows:
             build/app/outputs/flutter-apk/app-release.apk \
             build/app/outputs/bundle/release/app-release.aab \
             "$CM_BUILD_DIR/DailyLine.ipa" \
-            --repo SnapeV1/DailyLine \
+            --repo SnapeV1/quote_app \
             --title "DailyLine $TAG" \
             --notes "🚀 Automated release from Codemagic"
 
