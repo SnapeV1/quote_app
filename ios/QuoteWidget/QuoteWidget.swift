@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 
 private func sharedDefaults() -> UserDefaults? {
-    UserDefaults(suiteName: "group.com.yourname.dailyline")
+    UserDefaults(suiteName: "group.com.example.quoteApp")
 }
 
 struct QuoteEntry: TimelineEntry {
