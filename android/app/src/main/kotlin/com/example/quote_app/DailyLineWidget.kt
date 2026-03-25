@@ -1,4 +1,5 @@
-package com.example.quoteApp
+package com.example.quote_app
+
 
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
