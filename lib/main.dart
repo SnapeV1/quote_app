@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // Required by home_widget — must match your App Group ID exactly
-  HomeWidget.setAppGroupId('group.com.yourname.dailyline');
+  HomeWidget.setAppGroupId('group.com.example.quoteApp');
   runApp(const DailyLineApp());
 }
 
@@ -232,7 +232,7 @@ class AppStorage {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class WidgetBridge {
-  static const _iOSName     = 'DailyLineWidget';
+  static const _iOSName     = 'QuoteWidget';
   static const _androidName = 'DailyLineWidget';
 
   static Future<void> push(Quote quote) async {
